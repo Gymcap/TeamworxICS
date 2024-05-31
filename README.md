@@ -1,12 +1,13 @@
 # TeamworxICS  
 ### What is it  
-This is a python script which requests shift data, and associated coworker shift data from [Teamworx](https://www.ct-teamworx.com/). It organizes this shift data into an .ics file, which can then be imported or synced to various devices and services.  
+This is a python script which requests shift data, and associated coworker shift data from [Teamworx](https://www.ct-teamworx.com/).  
+It organizes this shift data into an .ics file, which can then be imported or synced to various devices and services.  
 
 
 ## First Run  
 The script itself can be renamed.  
-Upon first run the script will generate a .ini with the same root name as the script.  
-The .ini file will be populated with some default values and some instructions to install dependencies.
+Upon first run, the script will generate an .ini file with the same root name as the script.  
+The .ini file will be populated with some default values and some instructions to install dependencies.  
 Replace the default values with your own, and run the script again.  
 
 ### What you will need :
