@@ -1,7 +1,8 @@
 # TeamworxICS  
 ### What is it  
 This is a python script which requests shift data, and associated coworker shift data from [Teamworx](https://www.ct-teamworx.com/).  
-It organizes this shift data into an .ics file, which can then be imported or synced to various devices and services.  
+It organizes this shift data into an iCalendar .ics file, which can then be imported or synced to calendars on various devices and services.  
+It allows me to view my schedule in *my* calendar.
 
 
 ## First Run  
@@ -9,6 +10,7 @@ The script itself can be renamed.
 Upon first run, the script will generate an .ini file with the same root name as the script.  
 The .ini file will be populated with some default values and some instructions to install dependencies.  
 Replace the default values with your own, and run the script again.  
+Upon a successful run, the script will create a folder called "Schedule" and place the generated .ics file within it.  
 
 ### What you will need :
 - to Install 
