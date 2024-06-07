@@ -12,6 +12,7 @@ import requests
 from icalendar import Calendar, Event
 from tabulate import tabulate
 
+
 # Initialization of the Config and Dictionary Files
 def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 	# Use the root name of this script to name the ini file
@@ -21,15 +22,19 @@ def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 	# Touch the config file if it doesn't exist, then quit to allow the user to fill out config
 	if not configparser.ConfigParser().read(config_file): 
 		config = configparser.ConfigParser()
-		config['Config'] = {
+		config.optionxform=str
+		config['Login'] = {
 			'teamworx': 'example.ct-teamworx.com',
 			'username': 'example@email.com',
-			'password': 'p@55w0rd',
-			'timezone': 'US/Eastern',
-			'daysBefore': '30',
-			'daysAfter': '30'
+			'password': 'p@55w0rd'
 		}
-		config['Dependencies'] = {'Please ensure python is installed to get pip': 'https://www.python.org/downloads/', 'Please run the following in a terminal:': 'pip install icalendar datetime tabulate requests pytz configparser pathlib'}
+		config['Config'] = {
+			'daysBefore': '30',
+			'daysAfter': '30',
+			'timezone': 'US/Eastern',
+			'cullOldShifts': 'True'
+		}
+		config['Dependencies'] = {'Please ensure Python3 is installed to get pip': 'https://www.python.org/downloads/', 'Please run the following in a terminal:': 'pip install icalendar datetime tabulate requests pytz configparser pathlib'}
 		
 		# Write the config file and exit, as the script will fail without user configs
 		with open(config_file, 'w') as f:
@@ -42,14 +47,16 @@ def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 		config.read(config_file)
 
 		# Extract Variables
+		login = config['Login']
 		conf = config['Config']
-		username, password, teamworx, tz, daysBefore, daysAfter = [
-		conf['username'], 
-		conf['password'], 
-		conf['teamworx'], 
-		pytz.timezone(conf['timezone']), 
+		username, password, teamworx, daysBefore, daysAfter, tz, cullShiftsBoolean = [
+		login['username'], 
+		login['password'], 
+		login['teamworx'], 
 		int(conf['daysBefore']), 
 		int(conf['daysAfter']),
+		pytz.timezone(conf['timezone']),
+		conf['cullOldShifts']
 		]
 		org = teamworx.split('.')[0].capitalize() # Setting Org Name
 		# Calculate Date Range
@@ -64,21 +71,20 @@ def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 			dictionary.write(f)
 	dictionary = configparser.ConfigParser()
 	dictionary.sections()
-	dictionary.read('.shiftDictionary')
-	#time.sleep(3)
+	dictionary.read(dictFile)
 	dictionary['Shifts'] = {}
 	dictionary['Coworkers'] = {}
-	return conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile
+	return conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile, cullShiftsBoolean
 	#print(conf, pyName, username, password, teamworx, tz, startDate, endDate, dictionary, dictFile)
-	
-def readDictionary(dictionary, laborDate, shiftID):
-	dictionary.read('.shiftDictionary')
+
+def readDictionary(dictionary, dictFile, laborDate, shiftID):
+	dictionary.read(dictFile)
 	coworkersOnShift = dictionary['Coworkers']
 	coworkersOnShift = coworkersOnShift.get(f"{laborDate} - {shiftID}", 'none')
 	return coworkersOnShift
 	#print(coworkersOnShift)
-	
-	
+
+
 
 # Requests to Teamworx
 def getAuth(teamworx, username, password): # 🍪 Login to Teamworx and retrieve auth cookies for further requests
@@ -89,10 +95,10 @@ def getAuth(teamworx, username, password): # 🍪 Login to Teamworx and retrieve
 	}
 	auth_url = f"https://{teamworx}/json/a/account/authorization"
 	headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'}
-	auth = requests.post(auth_url, headers=headers, data=login) # Teamworx shares their cookies with us c: 🍪
+	auth = requests.post(auth_url, headers=headers, data=login) # Teamworx shares their cookies with us :D 🍪
 	return auth
 	#print(auth)
-	
+
 def getSchedule(teamworx, startDate, endDate, authCookies): # Request the schedule for the date range chosen
 	url = f"https://{teamworx}/json/e/schedule/get/forDateRange"
 	dateRange = {
@@ -105,7 +111,7 @@ def getSchedule(teamworx, startDate, endDate, authCookies): # Request the schedu
 	schedule = [{k: shift[k] for k in shift if k in keep} for shift in scheduleBloated]
 	return schedule
 	#print(schedule)
-	
+
 def getCoworkersOnShift(shiftID, laborDate, teamworx, authCookies):
 	# Make a Request to Teamworx for the Coworkers who will be present during your Shift
 	coworkershiftinfo = { # Assign Details for Coworker Shift Request
@@ -140,9 +146,9 @@ def getCoworkersOnShift(shiftID, laborDate, teamworx, authCookies):
 	coworkersOnShift = f"Coworkers:\n{coworkersOnShift}" # Label for Aesthetic, New-Line so the grid isn't disturbed'
 	return(coworkersOnShift)
 	#print(coworkersOnShift) by Request to Teamworx
-	
-	
-	
+
+
+
 # Cleaning, Formatting, and Assigning Shift Info to Variables and Dictionary Entries
 def setShiftVars(shift, org):
 	utc_tz = pytz.UTC
@@ -163,22 +169,43 @@ def setShiftVars(shift, org):
 	outTime = datetime.strptime(f"{shift['laborDate']} {shift['outTimeText']}", '%Y-%m-%d %I:%M %p').astimezone(utc_tz)
 	return location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime
 	#print(location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime)	
-	
-def readCoworkersOnShift(dictionary, laborDate, shiftID):
+
+def readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID):
 	dictionary = configparser.ConfigParser()
 	dictionary.sections()
-	dictionary.read('.shiftDictionary')
+	dictionary.read(dictFile)
 	coworkersOnShift = dictionary['Coworkers']
 	coworkersOnShift = coworkersOnShift.get(f"{laborDate} - {shiftID}", f"none for {laborDate} - {shiftID}")
 	return(coworkersOnShift)
 	#print(coworkersOnShift) from Dictionary
-	
+
 def saveCoworkersToDictionary(dictionary, dictFile, laborDate, shiftID, coworkersOnShift):
-	dictionary.read('.shiftDictionary')
+	dictionary.read(dictFile)
 	dictionary.set('Coworkers', f"{laborDate} - {shiftID}", f"{coworkersOnShift}")
 	with open(dictFile, 'w') as f:
 		dictionary.write(f)
 	#print('### Shift has passed, Saving to Dictionary ###')
+
+def cullOldShiftsFromDictionary(dictionary, dictFile, startDate):
+	count = 0
+	dictionary.read(dictFile)
+	# Check the whole Dictionary
+	for allEntries in dictionary.sections():
+		for (title, value) in dictionary.items(allEntries):
+			keyDate = title.split(' - ')[0]
+			# If any Entry has Expired the Date Range selected by the User 
+			if keyDate < startDate:
+				# Remove the Entry
+				dictionary.remove_option(allEntries, title)	
+				count += 1
+	with open(dictFile, 'w') as f:
+		dictionary.write(f)
+	
+	# If any Shifts were Removed, Print the Amount
+	s = 's' if count != 1 else ''
+	if count > 0: print(f"\n {count} Old Shift{s} Cleaned from {dictFile}")
+	return()
+
 
 
 
@@ -196,7 +223,7 @@ def initICS(org):
 	cal.add('version', '2.0')
 	return cal
 	# Setup first lines of the .ics file
-	
+
 def addEventICS(cal, position, length, inTime, outTime, coworkersOnShift, location):
 	event = Event()
 	event.add('name', "Work Time")
@@ -212,7 +239,7 @@ def addEventICS(cal, position, length, inTime, outTime, coworkersOnShift, locati
 	cal.add_component(event)
 	return
 	# For every shift, generate and ical event
-	
+
 def saveICS(cal, org):
 	directory = Path.cwd() / 'Schedule'
 	directory.mkdir(parents=True, exist_ok=True)
@@ -222,13 +249,13 @@ def saveICS(cal, org):
 	saved = f"Your Schedule has been saved to:\n{directory}/{org}.ics"
 	return(saved)
 	# Write the generated .ics file
-	
-	
+
+
 
 # Run
 def main(): 
 		##### Initialize #####
-	conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile = init()
+	conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile, cullShiftsBoolean = init()
 		### Request Auth Cookie ###
 	authCookies = getAuth(teamworx, username, password).cookies
 		### Request Schedule ###
@@ -242,7 +269,7 @@ def main():
 		location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime = setShiftVars(shift, org)
 		
 			# Look for coworkers attending this shift in the dictionary
-		coworkersOnShift = readDictionary(dictionary, laborDate, shiftID)
+		coworkersOnShift = readDictionary(dictionary, dictFile, laborDate, shiftID)
 		
 			# Is there a Dictionary Entry for this Shift?
 		if coworkersOnShift == 'none':
@@ -252,9 +279,9 @@ def main():
 			print(prettyShifts("Requested", org, shift, coworkersOnShift))
 			
 		################ CURRENT LOGIC FOR REQUEST REDUCTION, SUBJECT TO CHANGE #################
-			# Is this Shift in the Past?
-			if not laborDate >= datetime.today().strftime('%Y-%m-%d'): 
-				
+			# Is this Shift Date in the Past?
+			#if not laborDate >= datetime.today().strftime('%Y-%m-%d'): 
+			if laborDate < datetime.today().strftime('%Y-%m-%d'): 
 				# If Shift is in the past, save it to the dictionary
 				saveCoworkersToDictionary(dictionary, dictFile, laborDate, shiftID, coworkersOnShift) # Save Coworkers to Dictionary
 				
@@ -262,22 +289,26 @@ def main():
 			else:
 				# If this Shift Date has not passed, do not save it.
 				pass
-				#print("### Shift hasn't happened yet, Not saving to Dictionary ###")
+				#print("### Shift Date hasn't passed yet, Not saving to Dictionary ###")
 		#########################################################################################
 		
 		# Was this Shift found in the Dictionary?	
 		else:
 			
 			# If this Shift was found in the Dictionary, then use the info found there
-			coworkersOnShift = readCoworkersOnShift(dictionary, laborDate, shiftID) # Read Coworkers from Dictionary
+			coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID) # Read Coworkers from Dictionary
 			print(prettyShifts("On-Disk", org, shift, coworkersOnShift))
 			
 			# Append this Shift to the .ics file
 		addEventICS(cal, position, length, inTime, outTime, coworkersOnShift, location)
-			
-
+	
+	
 	print(saveICS(cal, org))
 		
-	
+	if conf.getboolean('culloldshifts') == True:
+		cullOldShiftsFromDictionary(dictionary, dictFile, startDate)
+
+
+
 if __name__ == "__main__":
 	main()
