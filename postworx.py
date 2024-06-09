@@ -290,8 +290,7 @@ def main():
 				
 				# Use this Entry to fill the Calendar 
 				coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location) # Read Coworkers from Dictionary
-			
-			print(prettyShifts("On-Disk", org, shift, coworkersOnShift))
+				print(prettyShifts("On-Disk", org, shift, coworkersOnShift))
 			
 			# Append this Shift to the .ics file
 		addEventICS(cal, position, length, inTime, outTime, coworkersOnShift, location)
