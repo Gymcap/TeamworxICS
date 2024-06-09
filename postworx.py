@@ -3,10 +3,9 @@
 import configparser
 import json
 import os
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
-import dateutil.relativedelta
 import pytz
 import requests
 from icalendar import Calendar, Event
@@ -66,20 +65,18 @@ def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 	if not configparser.ConfigParser().read(dictFile): # Touch .shiftDictionary.ini if it doesnt exist
 		dictionary = configparser.ConfigParser()
 		dictionary['Shifts'] = {}
-		dictionary['Coworkers'] = {}
 		with open(dictFile, 'w') as f:
 			dictionary.write(f)
 	dictionary = configparser.ConfigParser()
 	dictionary.sections()
 	dictionary.read(dictFile)
 	dictionary['Shifts'] = {}
-	dictionary['Coworkers'] = {}
 	return conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile, cullShiftsBoolean
 	#print(conf, pyName, username, password, teamworx, tz, startDate, endDate, dictionary, dictFile)
 
 def readDictionary(dictionary, dictFile, laborDate, shiftID):
 	dictionary.read(dictFile)
-	coworkersOnShift = dictionary['Coworkers']
+	coworkersOnShift = dictionary['Shifts']
 	coworkersOnShift = coworkersOnShift.get(f"{laborDate} - {shiftID}", 'none')
 	return coworkersOnShift
 	#print(coworkersOnShift)
@@ -167,21 +164,26 @@ def setShiftVars(shift, org):
 		# Convert Date and Times to iCal compatible formats, and adjust for config timezone
 	inTime = datetime.strptime(f"{shift['laborDate']} {shift['inTimeText']}", '%Y-%m-%d %I:%M %p').astimezone(utc_tz)
 	outTime = datetime.strptime(f"{shift['laborDate']} {shift['outTimeText']}", '%Y-%m-%d %I:%M %p').astimezone(utc_tz)
-	return location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime
+	dictShiftEntry = f"Shift Details:\n{position}: {shift['inTimeText']} - {shift['outTimeText']} - {length} - {location}"
+	return location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime, dictShiftEntry
 	#print(location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime)	
 
-def readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID):
+def readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location):
 	dictionary = configparser.ConfigParser()
 	dictionary.sections()
 	dictionary.read(dictFile)
-	coworkersOnShift = dictionary['Coworkers']
-	coworkersOnShift = coworkersOnShift.get(f"{laborDate} - {shiftID}", f"none for {laborDate} - {shiftID}")
+	coworkersOnShift = dictionary['Shifts']
+	coworkersOnShift = coworkersOnShift.get(f"{laborDate} - {shiftID}", f"none for {laborDate} - {shiftID}").split(f"{location}\n\n")[1]
+	#.split(f"{location}\n\n")[1] # Finds the end of the "Shift Details" Part of the Dictionary Entry and returns the "Coworkers" Part following it
 	return(coworkersOnShift)
 	#print(coworkersOnShift) from Dictionary
 
-def saveCoworkersToDictionary(dictionary, dictFile, laborDate, shiftID, coworkersOnShift):
+
+
+# Dictionary
+def saveShiftsToDictionary(dictionary, dictFile, laborDate, shiftID, dictShiftEntry, coworkersOnShift):
 	dictionary.read(dictFile)
-	dictionary.set('Coworkers', f"{laborDate} - {shiftID}", f"{coworkersOnShift}")
+	dictionary.set('Shifts', f"{laborDate} - {shiftID}", f"\n{dictShiftEntry}\n\n{coworkersOnShift}")
 	with open(dictFile, 'w') as f:
 		dictionary.write(f)
 	#print('### Shift has passed, Saving to Dictionary ###')
@@ -208,11 +210,9 @@ def cullOldShiftsFromDictionary(dictionary, dictFile, startDate):
 
 
 
-
 # Terminal Output
 def prettyShifts(howDidWeGetHere, org, shift, coworkersOnShift): # The BIG Print
 	return(f"###### {howDidWeGetHere} Details for {org} Shift #{shift['scheduleShiftId']} ######\n [{shift['laborDate']}] - [{shift['positionName']}]: [{shift['inTimeText']}-{shift['outTimeText']}] [{shift['hours']} Hours]\n################# Coworkers this Shift #################\n{coworkersOnShift}\n\n")
-
 
 
 
@@ -266,7 +266,7 @@ def main():
 		# For each Shift in the Schedule
 	for shift in schedule:
 			# Extract the information for this shift
-		location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime = setShiftVars(shift, org)
+		location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime, dictShiftEntry = setShiftVars(shift, org)
 		
 			# Look for coworkers attending this shift in the dictionary
 		coworkersOnShift = readDictionary(dictionary, dictFile, laborDate, shiftID)
@@ -283,7 +283,7 @@ def main():
 			#if not laborDate >= datetime.today().strftime('%Y-%m-%d'): 
 			if laborDate < datetime.today().strftime('%Y-%m-%d'): 
 				# If Shift is in the past, save it to the dictionary
-				saveCoworkersToDictionary(dictionary, dictFile, laborDate, shiftID, coworkersOnShift) # Save Coworkers to Dictionary
+				saveShiftsToDictionary(dictionary, dictFile, laborDate, shiftID, dictShiftEntry, coworkersOnShift) # Save Shift Info and Coworker Attendance to Dictionary
 				
 			# Or is this Shift in the Future?
 			else:
@@ -296,7 +296,7 @@ def main():
 		else:
 			
 			# If this Shift was found in the Dictionary, then use the info found there
-			coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID) # Read Coworkers from Dictionary
+			coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location) # Read Coworkers from Dictionary
 			print(prettyShifts("On-Disk", org, shift, coworkersOnShift))
 			
 			# Append this Shift to the .ics file
