@@ -48,14 +48,13 @@ def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 		# Extract Variables
 		login = config['Login']
 		conf = config['Config']
-		username, password, teamworx, daysBefore, daysAfter, tz, cullShiftsBoolean = [
+		username, password, teamworx, daysBefore, daysAfter, tz = [
 		login['username'], 
 		login['password'], 
 		login['teamworx'], 
 		int(conf['daysBefore']), 
 		int(conf['daysAfter']),
 		pytz.timezone(conf['timezone']),
-		conf['cullOldShifts']
 		]
 		org = teamworx.split('.')[0].capitalize() # Setting Org Name
 		# Calculate Date Range
@@ -71,7 +70,7 @@ def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 	dictionary.sections()
 	dictionary.read(dictFile)
 	dictionary['Shifts'] = {}
-	return conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile, cullShiftsBoolean
+	return conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile
 	#print(conf, pyName, username, password, teamworx, tz, startDate, endDate, dictionary, dictFile)
 
 def readDictionary(dictionary, dictFile, laborDate, shiftID):
@@ -255,7 +254,7 @@ def saveICS(cal, org):
 # Run
 def main(): 
 		##### Initialize #####
-	conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile, cullShiftsBoolean = init()
+	conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile = init()
 		### Request Auth Cookie ###
 	authCookies = getAuth(teamworx, username, password).cookies
 		### Request Schedule ###
@@ -271,32 +270,27 @@ def main():
 			# Look for coworkers attending this shift in the dictionary
 		coworkersOnShift = readDictionary(dictionary, dictFile, laborDate, shiftID)
 		
-			# Is there a Dictionary Entry for this Shift?
-		if coworkersOnShift == 'none':
+			# If there is no Dictionary Entry for this Shift, or If the Shift is in the Future
+		if coworkersOnShift == 'none' or laborDate >= datetime.today().strftime('%Y-%m-%d'):
 			
-			# If there is no entry then make a request
+			# Make a Request for the Coworkers Attending this Shift
 			coworkersOnShift = getCoworkersOnShift(shiftID, laborDate, teamworx, authCookies)
+			
+			# Save the Shift to the Dictionary
+			saveShiftsToDictionary(dictionary, dictFile, laborDate, shiftID, dictShiftEntry, coworkersOnShift) # Save Shift Info and Coworker Attendance to Dictionary
 			print(prettyShifts("Requested", org, shift, coworkersOnShift))
 			
-		################ CURRENT LOGIC FOR REQUEST REDUCTION, SUBJECT TO CHANGE #################
-			# Is this Shift Date in the Past?
-			#if not laborDate >= datetime.today().strftime('%Y-%m-%d'): 
-			if laborDate < datetime.today().strftime('%Y-%m-%d'): 
-				# If Shift is in the past, save it to the dictionary
-				saveShiftsToDictionary(dictionary, dictFile, laborDate, shiftID, dictShiftEntry, coworkersOnShift) # Save Shift Info and Coworker Attendance to Dictionary
-				
-			# Or is this Shift in the Future?
-			else:
-				# If this Shift Date has not passed, do not save it.
-				pass
-				#print("### Shift Date hasn't passed yet, Not saving to Dictionary ###")
-		#########################################################################################
-		
-		# Was this Shift found in the Dictionary?	
+		# Was this Shift found in the Dictionary, OR was the found Shift from the Past?	
 		else:
 			
-			# If this Shift was found in the Dictionary, then use the info found there
-			coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location) # Read Coworkers from Dictionary
+			# If this Shift was found in the Dictionary, and the Date has Passed
+			if coworkersOnShift != 'none' and laborDate < datetime.today().strftime('%Y-%m-%d'): 
+				# ^ This line may not be nessesary, I don't know how python handles this. 
+				# This is basically the previous if statements else, but with "and" rather than "or" because the date must be in the past to use it for the Calendar.
+				
+				# Use this Entry to fill the Calendar 
+				coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location) # Read Coworkers from Dictionary
+			
 			print(prettyShifts("On-Disk", org, shift, coworkersOnShift))
 			
 			# Append this Shift to the .ics file
@@ -305,7 +299,7 @@ def main():
 	
 	print(saveICS(cal, org))
 		
-	if conf.getboolean('culloldshifts') == True:
+	if conf.getboolean('cullOldShifts') == True:
 		cullOldShiftsFromDictionary(dictionary, dictFile, startDate)
 
 
