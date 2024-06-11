@@ -60,13 +60,12 @@ def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 		# Calculate Date Range
 		startDate = (datetime.now() - timedelta(days=daysBefore)).strftime('%Y-%m-%d')
 		endDate = (datetime.now() + timedelta(days=daysAfter)).strftime('%Y-%m-%d')
+	dictionary = configparser.ConfigParser()	
 	dictFile = ".shiftDictionary" 
-	if not configparser.ConfigParser().read(dictFile): # Touch .shiftDictionary.ini if it doesnt exist
-		dictionary = configparser.ConfigParser()
-		dictionary['Shifts'] = {}
+	if not configparser.ConfigParser().read(dictFile): # Check if the .shiftDictionary exists
+		dictionary['Shifts'] = {} # Touch .shiftDictionary.ini if it doesnt exist
 		with open(dictFile, 'w') as f:
 			dictionary.write(f)
-	dictionary = configparser.ConfigParser()
 	dictionary.sections()
 	dictionary.read(dictFile)
 	dictionary['Shifts'] = {}
