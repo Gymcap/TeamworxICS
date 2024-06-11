@@ -73,13 +73,6 @@ def init(): # Read Conf OR Touch Conf and Quit to allow user to customize conf
 	return conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile
 	#print(conf, pyName, username, password, teamworx, tz, startDate, endDate, dictionary, dictFile)
 
-def readDictionary(dictionary, dictFile, laborDate, shiftID):
-	dictionary.read(dictFile)
-	coworkersOnShift = dictionary['Shifts']
-	coworkersOnShift = coworkersOnShift.get(f"{laborDate} - {shiftID}", 'none')
-	return coworkersOnShift
-	#print(coworkersOnShift)
-
 
 
 # Requests to Teamworx
@@ -168,11 +161,9 @@ def setShiftVars(shift, org):
 	#print(location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime)	
 
 def readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location):
-	dictionary = configparser.ConfigParser()
-	dictionary.sections()
 	dictionary.read(dictFile)
 	coworkersOnShift = dictionary['Shifts']
-	coworkersOnShift = coworkersOnShift.get(f"{laborDate} - {shiftID}", f"none for {laborDate} - {shiftID}").split(f"{location}\n\n")[1]
+	coworkersOnShift = coworkersOnShift.get(f"{laborDate} - {shiftID}", 'none').split(f"{location}\n\n")[1]
 	#.split(f"{location}\n\n")[1] # Finds the end of the "Shift Details" Part of the Dictionary Entry and returns the "Coworkers" Part following it
 	return(coworkersOnShift)
 	#print(coworkersOnShift) from Dictionary
@@ -272,13 +263,12 @@ def main():
 		location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime, dictShiftEntry = setShiftVars(shift, org)
 		
 		# Look for coworkers attending this shift in the dictionary
-		coworkersOnShift = readDictionary(dictionary, dictFile, laborDate, shiftID)
+		coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location) # Read Coworkers from Dictionary
 		
 		# If this Shift was found in the Dictionary, and the Date has Passed
 		if coworkersOnShift != 'none' and laborDate < datetime.today().strftime('%Y-%m-%d'):
 			
-			# Use this Entry to fill the Calendar 
-			coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location) # Read Coworkers from Dictionary
+			# This Shift is Eligible, Continue and Use this Entry to fill the Calendar 
 			howDidWeGetHere = "On-Disk"
 
 		# If there is no Dictionary Entry for this Shift, or If the Shift is in the Future	
