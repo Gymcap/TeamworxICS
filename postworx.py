@@ -253,46 +253,47 @@ def saveICS(cal, org):
 
 # Run
 def main(): 
-		##### Initialize #####
+	##### Initialize
 	conf, pyName, username, password, teamworx, org, tz, startDate, endDate, dictionary, dictFile = init()
-		### Request Auth Cookie ###
+
+	### Request Auth Cookie
 	authCookies = getAuth(teamworx, username, password).cookies
-		### Request Schedule ###
+
+	### Request Schedule
 	schedule = getSchedule(teamworx, startDate, endDate, authCookies)
 	
-		# Set the first lines of the .ics file
+	# Set the first lines of the .ics file
 	cal = initICS(org)
-		# For each Shift in the Schedule
+
+	# For each Shift in the Schedule
 	for shift in schedule:
-			# Extract the information for this shift
+
+		# Extract the information for this shift
 		location, position, shiftID, laborDate, hours, minutes, length, inTime, outTime, dictShiftEntry = setShiftVars(shift, org)
 		
-			# Look for coworkers attending this shift in the dictionary
+		# Look for coworkers attending this shift in the dictionary
 		coworkersOnShift = readDictionary(dictionary, dictFile, laborDate, shiftID)
 		
-			# If there is no Dictionary Entry for this Shift, or If the Shift is in the Future
-		if coworkersOnShift == 'none' or laborDate >= datetime.today().strftime('%Y-%m-%d'):
+		# If this Shift was found in the Dictionary, and the Date has Passed
+		if coworkersOnShift != 'none' and laborDate < datetime.today().strftime('%Y-%m-%d'):
 			
+			# Use this Entry to fill the Calendar 
+			coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location) # Read Coworkers from Dictionary
+			howDidWeGetHere = "On-Disk"
+
+		# If there is no Dictionary Entry for this Shift, or If the Shift is in the Future	
+		else:
+
 			# Make a Request for the Coworkers Attending this Shift
 			coworkersOnShift = getCoworkersOnShift(shiftID, laborDate, teamworx, authCookies)
 			
 			# Save the Shift to the Dictionary
 			saveShiftsToDictionary(dictionary, dictFile, laborDate, shiftID, dictShiftEntry, coworkersOnShift) # Save Shift Info and Coworker Attendance to Dictionary
-			print(prettyShifts("Requested", org, shift, coworkersOnShift))
-			
-		# Was this Shift found in the Dictionary, OR was the found Shift from the Past?	
-		else:
-			
-			# If this Shift was found in the Dictionary, and the Date has Passed
-			if coworkersOnShift != 'none' and laborDate < datetime.today().strftime('%Y-%m-%d'): 
-				# ^ This line may not be nessesary, I don't know how python handles this. 
-				# This is basically the previous if statements else, but with "and" rather than "or" because the date must be in the past to use it for the Calendar.
-				
-				# Use this Entry to fill the Calendar 
-				coworkersOnShift = readCoworkersOnShift(dictionary, dictFile, laborDate, shiftID, location) # Read Coworkers from Dictionary
-				print(prettyShifts("On-Disk", org, shift, coworkersOnShift))
-			
-			# Append this Shift to the .ics file
+			howDidWeGetHere = "Requested"
+		
+		# Print this Shift to the Terminal while indicating If a Request was made or not
+		print(prettyShifts(howDidWeGetHere, org, shift, coworkersOnShift))
+		# Append this Shift to the .ics file
 		addEventICS(cal, position, length, inTime, outTime, coworkersOnShift, location)
 	
 	
